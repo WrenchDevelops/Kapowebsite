@@ -214,7 +214,7 @@ h1, h2, h3, p { margin-top: 0; }
   border-bottom: 1px solid var(--line);
   scroll-margin-top: var(--header-height);
   scroll-snap-align: start;
-  scroll-snap-stop: normal;
+  scroll-snap-stop: always;
   background: white;
 }
 
@@ -804,8 +804,11 @@ h1, h2, h3, p { margin-top: 0; }
 @media (min-width: 981px) {
   html {
     scroll-padding-top: var(--header-height);
-    scroll-snap-type: y proximity;
+    scroll-snap-type: y mandatory;
+    overscroll-behavior-y: contain;
   }
+
+  .site-footer { scroll-snap-align: end; scroll-snap-stop: always; }
 }
 
 @media (max-width: 1100px) {
