@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import {
   ArrowRight,
   Camera,
+  ChevronLeft,
+  ChevronRight,
   Menu,
   Music2,
   Search,
@@ -21,31 +23,53 @@ const navItems = [
 ];
 
 const characters = [
-  { name: "Spore", image: "/products/spore-artisan.png" },
-  { name: "Gloop", image: "/products/gloop-artisan.png" },
-  { name: "Rango", image: "/products/rango-artisan.png" },
-  { name: "Brine", image: "/products/brine-artisan.png" },
-  { name: "Bitz", image: "/products/bitz-artisan.png" },
-  { name: "Orbit", image: "/products/orbit-artisan.png" },
-  { name: "Kobi", image: "/products/kobi-artisan.png" },
-  { name: "Rivet", image: "/products/rivet-artisan.png" },
-];
-
-const characterStories = [
   {
     name: "Spore",
-    image: "/products/spore-artisan.png",
+    artisan: "/products/spore-artisan.png",
+    flat: "/products/spore-flat.png",
     story: "A tiny forest guide who always takes the scenic route.",
   },
   {
+    name: "Gloop",
+    artisan: "/products/gloop-artisan.png",
+    flat: "/products/gloop-flat.png",
+    story: "A lovable lab escapee with zero chill and endless curiosity.",
+  },
+  {
     name: "Rango",
-    image: "/products/rango-artisan.png",
+    artisan: "/products/rango-artisan.png",
+    flat: "/products/rango-flat.png",
     story: "A pocket-sized sheriff with a giant sense of adventure.",
   },
   {
+    name: "Brine",
+    artisan: "/products/brine-artisan.png",
+    flat: "/products/brine-flat.png",
+    story: "A deep-sea dreamer charting strange corners of the desktop.",
+  },
+  {
+    name: "Bitz",
+    artisan: "/products/bitz-artisan.png",
+    flat: "/products/bitz-flat.png",
+    story: "An arcade regular who treats every shortcut like a high score.",
+  },
+  {
     name: "Orbit",
-    image: "/products/orbit-artisan.png",
+    artisan: "/products/orbit-artisan.png",
+    flat: "/products/orbit-flat.png",
     story: "An eager explorer collecting keyboard signals from the stars.",
+  },
+  {
+    name: "Kobi",
+    artisan: "/products/kobi-artisan.png",
+    flat: "/products/kobi-flat.png",
+    story: "A calm garden guardian who moves only when the timing is right.",
+  },
+  {
+    name: "Rivet",
+    artisan: "/products/rivet-artisan.png",
+    flat: "/products/rivet-flat.png",
+    story: "A cheerful tinkerer who can fix almost anything before lunch.",
   },
 ];
 
@@ -67,6 +91,10 @@ function ArrowLink({ children }: { children: React.ReactNode }) {
 export default function Home() {
   const [macropadMode, setMacropadMode] = useState<"bare" | "artisan">("artisan");
   const [baseColor, setBaseColor] = useState<"white" | "black">("white");
+  const [crewStyle, setCrewStyle] = useState<"flat" | "artisan">("artisan");
+  const [crewPage, setCrewPage] = useState(0);
+  const [crewItemsPerPage, setCrewItemsPerPage] = useState(4);
+  const [storyIndex, setStoryIndex] = useState(0);
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -91,17 +119,40 @@ export default function Home() {
     sections.forEach((section) => observer.observe(section));
 
     const handleScroll = () => setScrolled(window.scrollY > 36);
+    const handleResize = () => {
+      const itemsPerPage = window.innerWidth <= 680 ? 2 : 4;
+      setCrewItemsPerPage(itemsPerPage);
+      setCrewPage((page) => Math.min(page, Math.ceil(characters.length / itemsPerPage) - 1));
+    };
     handleScroll();
+    handleResize();
     window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleResize);
 
     return () => {
       observer.disconnect();
       window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleResize);
       document.documentElement.classList.remove("has-js");
     };
   }, []);
 
   const activeMacropad = `${baseColor}-${macropadMode}`;
+  const crewPageCount = Math.ceil(characters.length / crewItemsPerPage);
+  const activeStory = characters[storyIndex];
+
+  const changeCrewStyle = (style: "flat" | "artisan") => {
+    setCrewStyle(style);
+    setCrewPage(0);
+  };
+
+  const moveCrew = (direction: number) => {
+    setCrewPage((page) => (page + direction + crewPageCount) % crewPageCount);
+  };
+
+  const moveStory = (direction: number) => {
+    setStoryIndex((index) => (index + direction + characters.length) % characters.length);
+  };
 
   return (
     <div className="site-shell">
@@ -168,25 +219,43 @@ export default function Home() {
 
         <section id="crew" className="slide reveal-section crew-slide" aria-labelledby="crew-title">
           <div className="slide-inner crew-layout">
-            <header className="slide-heading reveal-target">
+            <header className="slide-heading crew-heading reveal-target">
               <div>
                 <p className="slide-number">02 / 07</p>
                 <h2 id="crew-title">Meet the KAPO crew.</h2>
               </div>
-              <p>Eight characters. Pick your favorite.</p>
+              <div className="carousel-toolbar">
+                <div className="minimal-switch" role="group" aria-label="Choose keycap style">
+                  <button type="button" className={crewStyle === "flat" ? "active" : ""} onClick={() => changeCrewStyle("flat")} aria-pressed={crewStyle === "flat"}>Flat</button>
+                  <button type="button" className={crewStyle === "artisan" ? "active" : ""} onClick={() => changeCrewStyle("artisan")} aria-pressed={crewStyle === "artisan"}>Artisan</button>
+                </div>
+                <span className="carousel-count">{String(crewPage + 1).padStart(2, "0")} / {String(crewPageCount).padStart(2, "0")}</span>
+                <div className="carousel-arrows">
+                  <button type="button" onClick={() => moveCrew(-1)} aria-label="Previous KAPO characters"><ChevronLeft aria-hidden="true" /></button>
+                  <button type="button" onClick={() => moveCrew(1)} aria-label="Next KAPO characters"><ChevronRight aria-hidden="true" /></button>
+                </div>
+              </div>
             </header>
-            <div className="crew-grid">
-              {characters.map((character, index) => (
-                <a className="crew-item reveal-target" href="#styles" key={character.name} style={{ "--i": index } as React.CSSProperties}>
-                  <div className="crew-image">
-                    <img src={character.image} alt={`${character.name} artisan keycap`} loading="lazy" />
-                  </div>
-                  <div className="crew-meta">
-                    <h3>{character.name}</h3>
-                    <div><span>Flat $4.99</span><span>Artisan $11.99</span></div>
-                  </div>
-                </a>
-              ))}
+            <div className="crew-carousel reveal-target">
+              <div
+                className="crew-track"
+                style={{
+                  "--crew-page": crewPage,
+                  "--crew-items": crewItemsPerPage,
+                } as React.CSSProperties}
+              >
+                {characters.map((character) => (
+                  <a className="crew-item" href="#styles" key={character.name}>
+                    <div className="crew-image">
+                      <img src={character[crewStyle]} alt={`${character.name} ${crewStyle} keycap`} loading="lazy" />
+                    </div>
+                    <div className="crew-meta">
+                      <h3>{character.name}</h3>
+                      <div><span>Flat $4.99</span><span>Artisan $11.99</span></div>
+                    </div>
+                  </a>
+                ))}
+              </div>
             </div>
           </div>
         </section>
@@ -278,19 +347,30 @@ export default function Home() {
             <div className="world-intro reveal-target">
               <p className="slide-number">05 / 07</p>
               <h2 id="world-title">More than<br />keycaps.</h2>
-              <p>Every character has a little story of their own.</p>
+              <p className="world-lead">Every character has a little story of their own.</p>
+              <div className="story-controls">
+                <span className="carousel-count">{String(storyIndex + 1).padStart(2, "0")} / {String(characters.length).padStart(2, "0")}</span>
+                <div className="carousel-arrows">
+                  <button type="button" onClick={() => moveStory(-1)} aria-label="Previous character story"><ChevronLeft aria-hidden="true" /></button>
+                  <button type="button" onClick={() => moveStory(1)} aria-label="Next character story"><ChevronRight aria-hidden="true" /></button>
+                </div>
+              </div>
             </div>
-            <div className="story-rows">
-              {characterStories.map((character, index) => (
-                <article className="story-row reveal-target" key={character.name} style={{ "--i": index } as React.CSSProperties}>
-                  <div className="story-image"><img src={character.image} alt={`${character.name} character`} loading="lazy" /></div>
-                  <div className="story-copy">
-                    <h3>{character.name}</h3>
-                    <p>{character.story}</p>
-                    <a className="text-link" href="#crew"><ArrowLink>Meet {character.name}</ArrowLink></a>
-                  </div>
-                </article>
-              ))}
+            <div className="story-carousel reveal-target" aria-live="polite">
+              <article className="story-card" key={activeStory.name}>
+                <div className="story-image"><img src={activeStory.artisan} alt={`${activeStory.name} artisan keycap character`} /></div>
+                <div className="story-copy">
+                  <p className="eyebrow">Character {String(storyIndex + 1).padStart(2, "0")}</p>
+                  <h3>{activeStory.name}</h3>
+                  <p>{activeStory.story}</p>
+                  <a className="text-link" href="#crew"><ArrowLink>Meet {activeStory.name}</ArrowLink></a>
+                </div>
+              </article>
+              <div className="story-index" aria-label="Choose a character story">
+                {characters.map((character, index) => (
+                  <button type="button" className={storyIndex === index ? "active" : ""} onClick={() => setStoryIndex(index)} aria-label={`Show ${character.name}'s story`} aria-pressed={storyIndex === index} key={character.name}>{character.name}</button>
+                ))}
+              </div>
             </div>
           </div>
         </section>
