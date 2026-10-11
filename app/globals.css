@@ -214,7 +214,7 @@ h1, h2, h3, p { margin-top: 0; }
   border-bottom: 1px solid var(--line);
   scroll-margin-top: var(--header-height);
   scroll-snap-align: start;
-  scroll-snap-stop: always;
+  scroll-snap-stop: normal;
   background: white;
 }
 
@@ -804,7 +804,7 @@ h1, h2, h3, p { margin-top: 0; }
 @media (min-width: 981px) {
   html {
     scroll-padding-top: var(--header-height);
-    scroll-snap-type: y mandatory;
+    scroll-snap-type: y proximity;
   }
 }
 
