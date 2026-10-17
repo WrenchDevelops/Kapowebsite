@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { readLocalUser } from "@/lib/commerce/local-session";
 
 export type ChatGPTUser = {
   userId: string;
@@ -37,6 +38,10 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
     email,
     fullName,
   };
+}
+
+export async function getShopUser(): Promise<ChatGPTUser | null> {
+  return (await getChatGPTUser()) ?? (await readLocalUser());
 }
 
 export async function requireChatGPTUser(

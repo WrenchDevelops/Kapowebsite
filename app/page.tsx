@@ -1,26 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   ArrowRight,
-  Camera,
   ChevronLeft,
   ChevronRight,
-  Menu,
-  Music2,
-  Search,
-  ShoppingCart,
-  UserRound,
-  Video,
 } from "lucide-react";
-
-const navItems = [
-  { label: "Shop", href: "#crew" },
-  { label: "Characters", href: "#world" },
-  { label: "Macropad", href: "#macropad" },
-  { label: "About", href: "#behind" },
-  { label: "FAQ", href: "#faq" },
-];
+import { SUPPORT_EMAIL } from "@/lib/store-facts";
 
 const characters = [
   {
@@ -74,9 +61,9 @@ const characters = [
 ];
 
 const videos = [
-  { title: "Printing Spore", image: "/products/spore-artisan.png" },
-  { title: "Designing a character", image: "/products/rivet-flat.png" },
-  { title: "Packing an order", image: "/products/macropad-white-build.png" },
+  { title: "Printing Spore", image: "/products/spore-artisan.png", alt: "" },
+  { title: "Designing a character", image: "/products/rivet-flat.png", alt: "" },
+  { title: "Packaging", image: "/products/kapo-packaging.jpg", alt: "Gloop packed in a KAPO box", fit: "contain" as const },
 ];
 
 function ArrowLink({ children }: { children: React.ReactNode }) {
@@ -90,15 +77,31 @@ function ArrowLink({ children }: { children: React.ReactNode }) {
 
 export default function Home() {
   const [macropadMode, setMacropadMode] = useState<"bare" | "artisan">("artisan");
+  const [macropadForSale, setMacropadForSale] = useState(false);
   const [baseColor, setBaseColor] = useState<"white" | "black">("white");
   const [crewStyle, setCrewStyle] = useState<"flat" | "artisan">("artisan");
   const [crewPage, setCrewPage] = useState(0);
   const [crewItemsPerPage, setCrewItemsPerPage] = useState(4);
   const [storyIndex, setStoryIndex] = useState(0);
-  const [scrolled, setScrolled] = useState(false);
+  const [storyPaused, setStoryPaused] = useState(false);
+
+  useEffect(() => {
+    let cancel = false;
+    fetch("/api/catalog/launch")
+      .then((response) => response.json())
+      .then((body: { macropad?: { published?: boolean; forSale?: boolean; priceCents?: number | null; inventory?: number | null } }) => {
+        const pad = body.macropad;
+        if (!cancel && pad?.published && pad.forSale && (pad.priceCents ?? 0) > 0 && pad.inventory !== 0) setMacropadForSale(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancel = true;
+    };
+  }, []);
 
   useEffect(() => {
     document.documentElement.classList.add("has-js");
+    document.documentElement.classList.add("homepage-snap");
 
     const sections = Array.from(
       document.querySelectorAll<HTMLElement>(".reveal-section"),
@@ -118,22 +121,20 @@ export default function Home() {
 
     sections.forEach((section) => observer.observe(section));
 
-    const handleScroll = () => setScrolled(window.scrollY > 36);
     const handleResize = () => {
-      const itemsPerPage = window.innerWidth <= 680 ? 2 : 4;
+      const width = window.innerWidth;
+      const itemsPerPage = width <= 680 ? 1 : width <= 1100 ? 2 : 4;
       setCrewItemsPerPage(itemsPerPage);
       setCrewPage((page) => Math.min(page, Math.ceil(characters.length / itemsPerPage) - 1));
     };
-    handleScroll();
     handleResize();
-    window.addEventListener("scroll", handleScroll, { passive: true });
     window.addEventListener("resize", handleResize);
 
     return () => {
       observer.disconnect();
-      window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", handleResize);
       document.documentElement.classList.remove("has-js");
+      document.documentElement.classList.remove("homepage-snap");
     };
   }, []);
 
@@ -225,6 +226,8 @@ export default function Home() {
     };
   }, []);
 
+  const crewTouch = useRef({ x: 0, y: 0 });
+  const storyTouch = useRef({ x: 0, y: 0 });
   const activeMacropad = `${baseColor}-${macropadMode}`;
   const crewPageCount = Math.ceil(characters.length / crewItemsPerPage);
   const activeStory = characters[storyIndex];
@@ -242,48 +245,47 @@ export default function Home() {
     setStoryIndex((index) => (index + direction + characters.length) % characters.length);
   };
 
+  const swipeHandlers = (
+    touch: React.MutableRefObject<{ x: number; y: number }>,
+    onSwipe: (direction: number) => void,
+  ) => ({
+    onTouchStart: (event: React.TouchEvent) => {
+      const point = event.changedTouches[0];
+      touch.current = { x: point.clientX, y: point.clientY };
+    },
+    onTouchEnd: (event: React.TouchEvent) => {
+      const point = event.changedTouches[0];
+      const dx = point.clientX - touch.current.x;
+      const dy = point.clientY - touch.current.y;
+      if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy)) return;
+      onSwipe(dx < 0 ? 1 : -1);
+    },
+  });
+
+  useEffect(() => {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (reducedMotion.matches || storyPaused) return;
+
+    const section = document.getElementById("world");
+    let visible = false;
+    const observer = new IntersectionObserver(([entry]) => {
+      visible = Boolean(entry?.isIntersecting);
+    }, { threshold: 0.45 });
+    if (section) observer.observe(section);
+
+    const timer = window.setInterval(() => {
+      if (!visible || document.hidden) return;
+      setStoryIndex((index) => (index + 1) % characters.length);
+    }, 5000);
+
+    return () => {
+      observer.disconnect();
+      window.clearInterval(timer);
+    };
+  }, [storyPaused, storyIndex]);
+
   return (
     <div className="site-shell">
-      <a className="skip-link" href="#main-content">Skip to content</a>
-
-      <header className={`site-header${scrolled ? " is-compact" : ""}`}>
-        <div className="header-inner">
-          <a className="brand" href="#hero" aria-label="KAPO home">
-            <img className="brand-mark" src="/kapo-mascot.png" alt="" width="42" height="42" />
-            <span className="brand-name">KAPO</span>
-          </a>
-
-          <nav className="desktop-nav" aria-label="Primary navigation">
-            {navItems.map((item) => (
-              <a key={item.label} href={item.href}>{item.label}</a>
-            ))}
-          </nav>
-
-          <div className="header-actions">
-            <a className="icon-link desktop-action" href="#crew" aria-label="Search">
-              <Search aria-hidden="true" strokeWidth={2} />
-            </a>
-            <a className="icon-link desktop-action" href="#footer" aria-label="Account">
-              <UserRound aria-hidden="true" strokeWidth={2} />
-            </a>
-            <a className="icon-link cart-link" href="#crew" aria-label="Shopping cart, 0 items">
-              <ShoppingCart aria-hidden="true" strokeWidth={2} />
-              <span className="cart-count">0</span>
-            </a>
-            <details className="mobile-menu">
-              <summary aria-label="Open navigation menu">
-                <Menu aria-hidden="true" strokeWidth={2} />
-              </summary>
-              <nav aria-label="Mobile navigation">
-                {navItems.map((item) => (
-                  <a key={item.label} href={item.href}>{item.label}</a>
-                ))}
-              </nav>
-            </details>
-          </div>
-        </div>
-      </header>
-
       <main id="main-content" className="slides">
         <section id="hero" className="slide hero-slide" aria-labelledby="hero-title">
           <div className="slide-inner hero-grid">
@@ -294,13 +296,13 @@ export default function Home() {
                 Eight original characters.<br />Available in Flat and Artisan.
               </p>
               <div className="hero-actions hero-step hero-step-4">
-                <a className="button button-dark" href="#crew"><ArrowLink>Shop the collection</ArrowLink></a>
-                <a className="text-link" href="#crew"><ArrowLink>Meet the characters</ArrowLink></a>
+                <Link className="button button-dark" href="/shop"><ArrowLink>Shop the collection</ArrowLink></Link>
+                <Link className="text-link" href="/characters"><ArrowLink>Meet the characters</ArrowLink></Link>
               </div>
               <p className="hero-note hero-step hero-step-5">8 characters · Flat + Artisan · MX compatible</p>
             </div>
             <div className="hero-media">
-              <img src="/products/macropad-white-build.png" alt="Six KAPO artisan character keycaps installed on a white macropad" />
+              <img src="/products/kapo-crew.jpg" alt="Six KAPO characters installed on a white macropad" />
             </div>
           </div>
         </section>
@@ -324,24 +326,25 @@ export default function Home() {
                 </div>
               </div>
             </header>
-            <div className="crew-carousel reveal-target">
+            <div className="crew-carousel reveal-target" {...swipeHandlers(crewTouch, moveCrew)}>
               <div
                 className="crew-track"
                 style={{
                   "--crew-page": crewPage,
                   "--crew-items": crewItemsPerPage,
+                  transform: `translate3d(-${crewPage * 100}%, 0, 0)`,
                 } as React.CSSProperties}
               >
                 {characters.map((character) => (
-                  <a className="crew-item" href="#styles" key={character.name}>
+                  <Link className="crew-item" href={`/characters/${character.name.toLowerCase()}`} key={character.name}>
                     <div className="crew-image">
                       <img src={character[crewStyle]} alt={`${character.name} ${crewStyle} keycap`} loading="lazy" />
                     </div>
                     <div className="crew-meta">
                       <h3>{character.name}</h3>
-                      <div><span>Flat $4.99</span><span>Artisan $11.99</span></div>
+                      <div><span>Flat $6.99</span><span>Artisan $11.99</span></div>
                     </div>
-                  </a>
+                  </Link>
                 ))}
               </div>
             </div>
@@ -364,7 +367,7 @@ export default function Home() {
                 <img src="/products/spore-flat.png" alt="Spore Flat keycap" loading="lazy" />
               </div>
               <div className="style-details price-reveal">
-                <span>$4.99</span>
+                <span>$6.99</span>
                 <p>Low-profile.<br />Made for everyday use.</p>
               </div>
             </article>
@@ -382,12 +385,59 @@ export default function Home() {
           </div>
         </section>
 
+        <section
+          id="world"
+          className="slide reveal-section world-slide"
+          aria-labelledby="world-title"
+          onMouseEnter={() => setStoryPaused(true)}
+          onMouseLeave={() => setStoryPaused(false)}
+          onFocus={() => setStoryPaused(true)}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setStoryPaused(false);
+          }}
+        >
+          <div className="slide-inner world-grid">
+            <div className="world-intro reveal-target">
+              <p className="slide-number">04 / 07</p>
+              <h2 id="world-title">More than<br />keycaps.</h2>
+              <p className="world-lead">Every character has a little story of their own.</p>
+              <div className="story-controls">
+                <span className="carousel-count">{String(storyIndex + 1).padStart(2, "0")} / {String(characters.length).padStart(2, "0")}</span>
+                <div className="carousel-arrows">
+                  <button type="button" onClick={() => moveStory(-1)} aria-label="Previous character story"><ChevronLeft aria-hidden="true" /></button>
+                  <button type="button" onClick={() => moveStory(1)} aria-label="Next character story"><ChevronRight aria-hidden="true" /></button>
+                </div>
+              </div>
+            </div>
+            <div className="story-carousel reveal-target" {...swipeHandlers(storyTouch, moveStory)}>
+              <article className="story-card" key={activeStory.name}>
+                <div className="story-image"><img src={activeStory.artisan} alt={`${activeStory.name} artisan keycap character`} /></div>
+                <div className="story-copy">
+                  <p className="eyebrow">Character {String(storyIndex + 1).padStart(2, "0")}</p>
+                  <h3>{activeStory.name}</h3>
+                  <p>{activeStory.story}</p>
+                  <Link className="text-link" href={`/characters/${activeStory.name.toLowerCase()}`}><ArrowLink>Meet {activeStory.name}</ArrowLink></Link>
+                </div>
+              </article>
+              <div className="story-index" aria-label="Choose a character story">
+                {characters.map((character, index) => (
+                  <button type="button" className={storyIndex === index ? "active" : ""} onClick={() => setStoryIndex(index)} aria-label={`Show ${character.name}'s story`} aria-pressed={storyIndex === index} key={character.name}>{character.name}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="macropad" className="slide reveal-section macropad-slide" aria-labelledby="macropad-title">
           <div className="slide-inner macropad-grid">
             <div className="macropad-copy reveal-target">
-              <p className="eyebrow">Six keys. Your cast.</p>
+              <p className="eyebrow">{macropadForSale ? "Six keys. Your cast." : "Coming soon · Price TBD"}</p>
               <h2 id="macropad-title">Build a<br />KAPO Pad.</h2>
-              <p className="macropad-lead">A programmable 6-key macropad built around your favorite characters.</p>
+              <p className="macropad-lead">
+                {macropadForSale
+                  ? "A programmable 6-key macropad built around your favorite characters."
+                  : "An upcoming six-key macropad. It is not for sale, and this preview does not take a preorder."}
+              </p>
 
               <div className="control-row">
                 <span>Build</span>
@@ -410,7 +460,7 @@ export default function Home() {
                 <li>USB-C</li><li>MX compatible</li><li>White or black</li>
               </ul>
 
-              <a className="button button-dark" href="#final"><ArrowLink>Build your Macropad</ArrowLink></a>
+              <Link className="button button-dark" href="/macropad"><ArrowLink>{macropadForSale ? "Shop the KAPO Pad" : "Preview the KAPO Pad"}</ArrowLink></Link>
             </div>
 
             <div className="macropad-stage reveal-target" aria-live="polite">
@@ -425,40 +475,7 @@ export default function Home() {
                   />
                 );
               })}
-              <p>{baseColor} · {macropadMode === "artisan" ? "Artisan Build" : "Bare"}</p>
-            </div>
-          </div>
-        </section>
-
-        <section id="world" className="slide reveal-section world-slide" aria-labelledby="world-title">
-          <div className="slide-inner world-grid">
-            <div className="world-intro reveal-target">
-              <p className="slide-number">05 / 07</p>
-              <h2 id="world-title">More than<br />keycaps.</h2>
-              <p className="world-lead">Every character has a little story of their own.</p>
-              <div className="story-controls">
-                <span className="carousel-count">{String(storyIndex + 1).padStart(2, "0")} / {String(characters.length).padStart(2, "0")}</span>
-                <div className="carousel-arrows">
-                  <button type="button" onClick={() => moveStory(-1)} aria-label="Previous character story"><ChevronLeft aria-hidden="true" /></button>
-                  <button type="button" onClick={() => moveStory(1)} aria-label="Next character story"><ChevronRight aria-hidden="true" /></button>
-                </div>
-              </div>
-            </div>
-            <div className="story-carousel reveal-target" aria-live="polite">
-              <article className="story-card" key={activeStory.name}>
-                <div className="story-image"><img src={activeStory.artisan} alt={`${activeStory.name} artisan keycap character`} /></div>
-                <div className="story-copy">
-                  <p className="eyebrow">Character {String(storyIndex + 1).padStart(2, "0")}</p>
-                  <h3>{activeStory.name}</h3>
-                  <p>{activeStory.story}</p>
-                  <a className="text-link" href="#crew"><ArrowLink>Meet {activeStory.name}</ArrowLink></a>
-                </div>
-              </article>
-              <div className="story-index" aria-label="Choose a character story">
-                {characters.map((character, index) => (
-                  <button type="button" className={storyIndex === index ? "active" : ""} onClick={() => setStoryIndex(index)} aria-label={`Show ${character.name}'s story`} aria-pressed={storyIndex === index} key={character.name}>{character.name}</button>
-                ))}
-              </div>
+              <p>{baseColor} · {macropadMode === "artisan" ? "Artisan Build" : "Bare"}{macropadForSale ? "" : " · Coming soon"}</p>
             </div>
           </div>
         </section>
@@ -467,19 +484,14 @@ export default function Home() {
           <div className="slide-inner behind-layout">
             <header className="slide-heading reveal-target">
               <div><p className="slide-number">06 / 07</p><h2 id="behind-title">Watch KAPO come to life.</h2></div>
-              <div className="social-links" aria-label="KAPO social links">
-                <a href="#behind" aria-label="KAPO on TikTok"><Music2 aria-hidden="true" /></a>
-                <a href="#behind" aria-label="KAPO on YouTube"><Video aria-hidden="true" /></a>
-                <a href="#behind" aria-label="KAPO on Instagram"><Camera aria-hidden="true" /></a>
-                <span>@KAPO</span>
-              </div>
+              <a className="behind-email" href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
             </header>
             <div className="video-grid">
               {videos.map((video, index) => (
-                <a className="video-panel reveal-target" href="#behind" key={video.title} style={{ "--i": index } as React.CSSProperties}>
-                  <img src={video.image} alt="" loading="lazy" />
+                <article className={`video-panel reveal-target${"fit" in video && video.fit === "contain" ? " video-panel-contain" : ""}`} key={video.title} style={{ "--i": index } as React.CSSProperties}>
+                  <img src={video.image} alt={video.alt} loading="lazy" />
                   <span>{video.title}</span>
-                </a>
+                </article>
               ))}
             </div>
           </div>
@@ -490,7 +502,7 @@ export default function Home() {
             <div className="final-copy reveal-target">
               <p className="eyebrow">Start your collection</p>
               <h2 id="final-title">Which one are<br />you picking first?</h2>
-              <a className="button button-dark" href="#crew"><ArrowLink>Shop the collection</ArrowLink></a>
+              <Link className="button button-dark" href="/shop"><ArrowLink>Shop the collection</ArrowLink></Link>
             </div>
             <div className="final-characters" aria-hidden="true">
               <img src="/products/spore-artisan.png" alt="" />
@@ -501,25 +513,6 @@ export default function Home() {
           </div>
         </section>
       </main>
-
-      <footer id="footer" className="site-footer">
-        <div className="footer-grid">
-          <a className="brand footer-brand" href="#hero" aria-label="KAPO home">
-            <img className="brand-mark" src="/kapo-mascot.png" alt="" width="42" height="42" />
-            <span className="brand-name">KAPO</span>
-          </a>
-          <nav aria-label="Footer navigation">
-            {navItems.slice(0, 4).map((item) => <a key={item.label} href={item.href}>{item.label}</a>)}
-          </nav>
-          <div id="faq" className="footer-support">
-            <p>FAQ</p>
-            <span>MX compatible</span>
-            <span>Shipping calculated at checkout</span>
-            <span>Flat + Artisan styles</span>
-          </div>
-        </div>
-        <div className="footer-bottom"><span>© 2026 KAPO</span><span>Keycaps with character.</span></div>
-      </footer>
     </div>
   );
 }
