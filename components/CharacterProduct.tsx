@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Minus, Plus } from "lucide-react";
 import type { Character, KeycapStyle } from "@/lib/catalog";
 import { characterImage, formatPrice, styleDetails } from "@/lib/catalog";
+import { WishlistButton } from "./WishlistButton";
 import { useCommerce } from "./CommerceProvider";
 
 export function CharacterProduct({ character }: { character: Character }) {
@@ -83,6 +84,7 @@ export function CharacterProduct({ character }: { character: Character }) {
             </div>
             <button type="button" className="button button-dark add-cart-button" onClick={addToCart}>{added ? "Added to cart" : "Add to cart"}</button>
           </div>
+          <WishlistButton key={`${character.slug}-${style}`} productId={`${character.slug}-${style}`} />
         </div>
       </section>
 

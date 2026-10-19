@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getShopUser } from "@/app/chatgpt-auth";
+import { OpenSupportButton } from "@/components/OpenSupportButton";
 import { formatCents } from "@/lib/commerce/money";
 import { PRODUCTION_LABELS, type ProductionStatus } from "@/lib/commerce/status";
 import { getCustomerOrder } from "@/lib/commerce/store";
@@ -72,7 +73,7 @@ export default async function CustomerOrderPage({ params }: { params: Promise<{ 
             <strong>Need help?</strong>
             <small>Questions about this order go straight to KAPO.</small>
           </span>
-          <Link href="/contact">Contact support</Link>
+          <OpenSupportButton className="order-help-primary" help={`I need help with order ${order.orderNumber}.`}>Contact support</OpenSupportButton>
           <Link href="/account">All orders</Link>
         </div>
       </section>
@@ -94,7 +95,7 @@ export default async function CustomerOrderPage({ params }: { params: Promise<{ 
         <p className="order-note">KAPO prints after payment. Carrier time starts when it ships.{pieceCount > 1 ? ` ${pieceCount} pieces.` : ""}</p>
         <div className="order-actions">
           {awaitingPayment && <Link className="order-pay" href="/checkout">View or update payment</Link>}
-          <Link className="order-cancel" href="/contact">Cancel order</Link>
+          <OpenSupportButton className="order-cancel" help={`I would like to cancel order ${order.orderNumber}.`}>Cancel order</OpenSupportButton>
         </div>
       </aside>
     </main>

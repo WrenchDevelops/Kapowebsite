@@ -1,32 +1,37 @@
+import { sender } from "../email/addresses.ts";
+import { sendResendEmail } from "../email/client.ts";
 import { renderEmail, type EmailOrder } from "./email-template.ts";
 import type { EmailTemplate } from "./status.ts";
 
 export async function deliverEmail(options: {
   apiKey: string;
-  from: string;
+  from?: string;
   order: EmailOrder;
   template: EmailTemplate;
   detail?: string;
+  idempotencyKey?: string;
   fetchImpl?: typeof fetch;
+  sleep?: (ms: number) => Promise<void>;
+  pace?: boolean;
 }) {
   const message = renderEmail(options.template, options.order, options.detail);
-  if (!options.apiKey || !options.from) {
-    return { status: "queued" as const, provider: null, subject: message.subject, error: "email_provider_not_configured" };
+  if (!options.apiKey) {
+    return { status: "queued" as const, provider: null, subject: message.subject, error: "email_provider_not_configured", id: null };
   }
-  const response = await (options.fetchImpl ?? fetch)("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${options.apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: options.from,
-      to: [options.order.customerEmail],
-      subject: message.subject,
-      html: message.html,
-      text: message.text,
-    }),
+  const sent = await sendResendEmail({
+    apiKey: options.apiKey,
+    from: options.from || sender("orders"),
+    to: [options.order.customerEmail],
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    idempotencyKey: options.idempotencyKey,
+    fetchImpl: options.fetchImpl,
+    sleep: options.sleep,
+    pace: options.pace,
   });
-  if (!response.ok) return { status: "failed" as const, provider: "resend", subject: message.subject, error: "email_provider_rejected" };
-  return { status: "sent" as const, provider: "resend", subject: message.subject, error: null };
+  if (!sent.ok) {
+    return { status: "failed" as const, provider: "resend", subject: message.subject, error: sent.error, id: null };
+  }
+  return { status: "sent" as const, provider: "resend", subject: message.subject, error: null, id: sent.id };
 }

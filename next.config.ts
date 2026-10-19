@@ -8,6 +8,14 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [{ source: "/search", destination: "/", permanent: false }];
   },
+  async headers() {
+    return [
+      {
+        source: "/fonts/:path*",
+        headers: [{ key: "Access-Control-Allow-Origin", value: "*" }],
+      },
+    ];
+  },
 };
 
 if (process.env.VERCEL) {

@@ -31,6 +31,7 @@ export async function saveMacropadLaunch(input: MacropadLaunchState) {
     throw new CommerceError("Inventory must be a whole number, or left open.", 400, "invalid_inventory");
   }
   await ensureCommerceSchema();
+  const before = await getMacropadLaunch();
   const db = getDb();
   const values = {
     id: "macropad",
@@ -50,5 +51,16 @@ export async function saveMacropadLaunch(input: MacropadLaunchState) {
       updatedAt: values.updatedAt,
     },
   });
-  return getMacropadLaunch();
+  const after = await getMacropadLaunch();
+  try {
+    const { recordMacropadChange } = await import("../email/engine.ts");
+    await recordMacropadChange(before, after);
+  } catch (error) {
+    console.log(JSON.stringify({
+      source: "kapo-commerce",
+      event: "announcement_failed",
+      code: error instanceof Error ? error.name : "error",
+    }));
+  }
+  return after;
 }

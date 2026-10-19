@@ -1,5 +1,5 @@
 import { characters, faqItems, formatPrice, macropadPurchasable, styleDetails, type MacropadLaunchState } from "./catalog";
-import { PRODUCTION_DAYS_MAX, PRODUCTION_DAYS_MIN, RETURN_WINDOW_DAYS, SUPPORT_EMAIL } from "./store-facts";
+import { INSTAGRAM_URL, PRODUCTION_DAYS_MAX, PRODUCTION_DAYS_MIN, RETURN_WINDOW_DAYS, SUPPORT_EMAIL, YOUTUBE_URL } from "./store-facts";
 
 export type PublicPage = {
   path: string;
@@ -24,7 +24,6 @@ export function publicPages(launch: MacropadLaunchState): PublicPage[] {
     { path: "/macropad/build", title: "KAPO Pad preview", summary: `Preview a six-key layout. ${pad}` },
     { path: "/about", title: "About", summary: "KAPO is a small character-driven keycap project. Characters are modeled, printed in small batches, checked, and packed." },
     { path: "/faq", title: "FAQ", summary: "Fit, switches, Flat versus Artisan, making, shipping, and the KAPO Pad." },
-    { path: "/contact", title: "Contact", summary: `Support email ${SUPPORT_EMAIL} and a contact form.` },
     { path: "/shipping-returns", title: "Shipping and returns", summary: `United States shipping is paid by the customer and calculated at checkout. Keycaps are made in ${PRODUCTION_DAYS_MIN} to ${PRODUCTION_DAYS_MAX} business days. Unused keycaps can be returned within ${RETURN_WINDOW_DAYS} days of delivery.` },
     { path: "/privacy", title: "Privacy", summary: "KAPO collects checkout and contact details to fulfill orders. Stripe processes cards, Shippo ships parcels, and Resend sends order email. KAPO does not sell personal information." },
     { path: "/terms", title: "Terms", summary: "Keycap orders are accepted when Stripe confirms payment. The KAPO Pad is not for sale. Shipping, production time, and returns follow the published policies." },
@@ -49,6 +48,9 @@ export function llmsText(origin: string, launch: MacropadLaunchState) {
     "Shipping: United States only. The customer pays shipping, calculated at checkout. There is no free-shipping offer.",
     `Production: ${PRODUCTION_DAYS_MIN} to ${PRODUCTION_DAYS_MAX} business days after payment, shown again at checkout. Carrier transit is extra.`,
     `Returns: unused keycaps in original packaging within ${RETURN_WINDOW_DAYS} days of delivery. Email ${SUPPORT_EMAIL}.`,
+    "Support: use the chat button on any page, then Get help from a person. There is no separate contact page.",
+    `Instagram: ${INSTAGRAM_URL}`,
+    `YouTube: ${YOUTUBE_URL}`,
     "",
     "## Pages",
     "",
@@ -124,6 +126,7 @@ export function siteJsonLd(origin: string, launch: MacropadLaunchState) {
         name: "KAPO",
         url: origin,
         description: "Original character keycaps for MX-style switches. The KAPO Pad is coming soon and is not for sale.",
+        sameAs: [INSTAGRAM_URL, YOUTUBE_URL],
       },
       {
         "@type": "ItemList",

@@ -1,5 +1,7 @@
+import { requireSameOrigin } from "@/lib/auth/server";
 import { getAdminUser } from "@/app/admin-auth";
 import { jsonError, readJson } from "@/lib/commerce/http";
+import { LABEL_PURCHASE_SOURCE } from "@/lib/commerce/label-guards";
 import {
   clearLabelAttempt,
   markShipped,
@@ -13,6 +15,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request, context: { params: Promise<{ orderId: string }> }) {
+  try { requireSameOrigin(request); } catch { return Response.json({ message: "Invalid request origin." }, { status: 403 }); }
   const admin = await getAdminUser();
   if (!admin) return Response.json({ message: "Admin access is required." }, { status: 403 });
   const { orderId } = await context.params;
@@ -23,6 +26,9 @@ export async function POST(request: Request, context: { params: Promise<{ orderI
       rateId?: string;
       confirmed?: boolean;
       amountCents?: number;
+      carrier?: string;
+      serviceName?: string;
+      orderNumber?: string;
       lengthIn?: number;
       widthIn?: number;
       heightIn?: number;
@@ -34,13 +40,22 @@ export async function POST(request: Request, context: { params: Promise<{ orderI
       case "refresh_rates":
         return Response.json(await refreshLabelRates(orderId, body));
       case "purchase_label":
-        return Response.json(await purchaseLabel(orderId, body.rateId ?? "", admin.email, body.confirmed === true));
+        return Response.json(await purchaseLabel(orderId, {
+          rateId: body.rateId ?? "",
+          confirmed: body.confirmed === true,
+          amountCents: body.amountCents ?? Number.NaN,
+          carrier: body.carrier ?? "",
+          serviceName: body.serviceName ?? "",
+        }, admin.email, LABEL_PURCHASE_SOURCE));
       case "clear_label_attempt":
-        return Response.json(await clearLabelAttempt(orderId, body.confirmed === true));
+        return Response.json(await clearLabelAttempt(orderId, {
+          confirmed: body.confirmed === true,
+          orderNumber: body.orderNumber ?? "",
+        }, admin.email, LABEL_PURCHASE_SOURCE));
       case "mark_shipped":
         return Response.json(await markShipped(orderId, admin.email));
       case "void_label":
-        return Response.json(await voidLabel(orderId, admin.email));
+        return Response.json(await voidLabel(orderId, admin.email, LABEL_PURCHASE_SOURCE));
       case "refund":
         return Response.json(await refundOrder(orderId, admin.email, body.amountCents));
       default:

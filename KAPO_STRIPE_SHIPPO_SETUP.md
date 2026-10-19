@@ -11,7 +11,10 @@ Copy `.env.example` to `.dev.vars` for local development. This site runs as a Cl
 | `STRIPE_SECRET_KEY` | Yes | Secret key, `sk_test_...` while testing |
 | `STRIPE_PUBLISHABLE_KEY` | Yes | Publishable key, `pk_test_...` |
 | `STRIPE_WEBHOOK_SECRET` | Yes, for paid orders | Signing secret for `/api/webhooks/stripe` |
-| `SHIPPO_API_TOKEN` | Yes | `shippo_test_...` token |
+| `SHIPPO_MODE` | Yes | `test` until you explicitly approve live postage |
+| `SHIPPO_TEST_API_KEY` | Yes | `shippo_test_...` token used for rates and test labels |
+| `SHIPPO_LIVE_API_KEY` | Live only | Stored, but unused while `SHIPPO_MODE=test` |
+| `SHIPPO_API_TOKEN` | No | Legacy fallback. A live token here is ignored in test mode |
 | `SHIPPO_WEBHOOK_TOKEN` | One of the two Shippo checks | Self-generated token in the webhook URL |
 | `SHIPPO_WEBHOOK_SECRET` | One of the two Shippo checks | HMAC secret from Shippo, if they enable it |
 | `KAPO_SHIPPING_ORIGIN` | Yes | JSON origin address in Pennsylvania |
@@ -21,7 +24,9 @@ Copy `.env.example` to `.dev.vars` for local development. This site runs as a Cl
 | `KAPO_DISCOUNT_CODES` | No | Example: `CREW10:percent:10,WELCOME:amount:500` |
 | `RESEND_API_KEY` and `KAPO_EMAIL_FROM` | No | Without these, emails stay queued |
 | `KAPO_ALLOW_LIVE_PAYMENTS` | Live only | Must be `true` before `sk_live_` charges |
-| `KAPO_ALLOW_LIVE_LABELS` | Live only | Must be `true` before `shippo_live_` label purchases |
+| `KAPO_ALLOW_LIVE_LABELS` | Live only | Must be `true` together with `SHIPPO_MODE=live` before any live label purchase |
+| `KAPO_LABEL_MAX_CENTS` | No | Hard ceiling is 1500 ($15) unless `KAPO_LABEL_LIMITS_OVERRIDE=true` |
+| `KAPO_LABEL_DAILY_MAX_CENTS` | No | Hard ceiling is 5000 ($50 per America/New_York day) unless the override is true |
 
 `amount` discounts are integer cents. Percent discounts apply to merchandise only, not shipping.
 
@@ -63,6 +68,8 @@ If the flag is on before Stripe Tax is ready, checkout returns a configuration e
 5. Shippo’s normal webhook protection is a self-generated URL token, not a signature. Put a long random token in the webhook URL: `https://YOUR_DOMAIN/api/webhooks/shippo?token=YOUR_TOKEN`. Set that same value as `SHIPPO_WEBHOOK_TOKEN`.
 6. HMAC (`Shippo-Auth-Signature: t=timestamp,v1=signature`) is optional and is set up with Shippo support. If you have that secret, set `SHIPPO_WEBHOOK_SECRET`. When both values are set, both checks must pass.
 7. Optional: `KAPO_SHIPPO_ENFORCE_IP_ALLOWLIST=true` accepts only Shippo’s published webhook IPs.
+
+Checkout asks Shippo for rates and stores the chosen rate on the order. It never buys a label. Stripe webhooks and Shippo webhooks never buy a label either. An authenticated admin approves one exact carrier and price on the order page. The server refuses a label over $15 and refuses the purchase when that day’s held postage would pass $50. A second purchase for the same order is blocked while a label is pending, succeeded, uncertain, or waiting on a void. Uncertain Shippo responses stay locked until an admin checks Shippo and clears the attempt.
 
 Domestic US checkout is the only destination today. `KAPO_SHIP_TO_COUNTRIES` defaults to `US` so another country can be added later without rewriting the rate flow. International customs are not implemented.
 
@@ -125,7 +132,7 @@ Automated tests in `tests/commerce.test.ts` mock these decisions and do not call
 
 1. Repeat the sandbox checklist on the hosted test deployment.
 2. Switch `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, and `STRIPE_WEBHOOK_SECRET` to live values. Create a separate live webhook endpoint.
-3. Replace `SHIPPO_API_TOKEN` with the live token and point the live webhook at the same path with a new token.
+3. Set `SHIPPO_MODE=live` and `KAPO_ALLOW_LIVE_LABELS=true` only when you want real postage. Keep `SHIPPO_LIVE_API_KEY` as the live token and point the live webhook at the same path with a new token.
 4. Set `STRIPE_TAX_ENABLED=true` only after registrations are active.
 5. Set `KAPO_ALLOW_LIVE_PAYMENTS=true` and `KAPO_ALLOW_LIVE_LABELS=true` only when you explicitly want real charges and real postage.
 6. Place one small live order, confirm the webhook, produce it, buy one real label, and confirm tracking before announcing checkout.

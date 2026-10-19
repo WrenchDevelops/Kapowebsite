@@ -12,7 +12,7 @@ const sections = [
   ["Orders", `An order is accepted when Stripe confirms the payment. KAPO ships within the United States. The customer pays shipping, which is calculated at checkout. Keycaps are made and packed in ${PRODUCTION_DAYS_MIN} to ${PRODUCTION_DAYS_MAX} business days after payment, and checkout shows the window that applies to that order. Carrier transit is extra.`],
   ["Small-batch variation", "KAPO characters are small-batch 3D prints. Tiny surface and color differences can occur. Those differences are part of the process and are not, by themselves, a defect."],
   ["Returns and refunds", `Unused keycaps can be returned as described on the Shipping & Returns page. Refunds go back to the original payment method through Stripe. Email ${SUPPORT_EMAIL} with the order number before sending anything back.`],
-  ["Accounts", "An account is optional. Signing in with the checkout email lets that browser see matching orders. Guest checkout still completes a purchase. You are responsible for the email address you enter, because tracking and order access use it."],
+  ["Accounts", "An account is optional. A verified KAPO Club account shows owned orders and can securely claim guest orders with the same verified purchase email. Guest checkout still completes a purchase. You are responsible for the email address you enter, because tracking and order access use it."],
   ["Questions", `Questions about an order, a product, or these terms go to ${SUPPORT_EMAIL}.`],
 ];
 

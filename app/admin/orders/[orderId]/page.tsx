@@ -9,7 +9,7 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ ord
   const admin = await getAdminUser();
   if (!admin) {
     return (
-      <main id="main-content" className="inner-page">
+      <main id="main-content" className="admin-login">
         <header className="page-intro editorial-width">
           <p className="eyebrow">Orders</p>
           <h1>Admins only.</h1>

@@ -7,6 +7,7 @@ import { Menu, Search, ShoppingCart, UserRound, X } from "lucide-react";
 import { characters, searchSite } from "@/lib/catalog";
 import { SUPPORT_EMAIL } from "@/lib/store-facts";
 import { useCommerce } from "./CommerceProvider";
+import { SocialLinks } from "./SocialLinks";
 
 const navItems = [
   { label: "Shop", href: "/shop" },
@@ -14,7 +15,6 @@ const navItems = [
   { label: "Macropad", href: "/macropad" },
   { label: "About", href: "/about" },
   { label: "FAQ", href: "/faq" },
-  { label: "Contact", href: "/contact" },
 ];
 
 export function SiteHeader() {
@@ -88,11 +88,11 @@ export function SiteHeader() {
       <div className="header-inner">
         <Link className="brand" href="/" aria-label="KAPO home">
           <img className="brand-mark" src="/kapo-mascot.png" alt="" width="42" height="42" />
-          <span className="brand-name">KAPO</span>
+          <img className="brand-name" src="/kapo-wordmark.png" alt="" width="111" height="32" />
         </Link>
 
           <nav className="desktop-nav" aria-label="Primary navigation">
-          {navItems.filter((item) => item.href !== "/contact").map((item) => <Link key={item.label} href={item.href}>{item.label}</Link>)}
+          {navItems.map((item) => <Link key={item.label} href={item.href}>{item.label}</Link>)}
         </nav>
 
         <div className="header-actions">
@@ -196,10 +196,13 @@ export function SiteFooter() {
   return (
     <footer id="footer" className="site-footer global-footer">
       <div className="footer-grid footer-grid-four">
-        <Link className="brand footer-brand" href="/" aria-label="KAPO home">
-          <img className="brand-mark" src="/kapo-mascot.png" alt="" width="42" height="42" />
-          <span className="brand-name">KAPO</span>
-        </Link>
+        <div className="footer-brand-col">
+          <Link className="brand footer-brand" href="/" aria-label="KAPO home">
+            <img className="brand-mark" src="/kapo-mascot.png" alt="" width="42" height="42" />
+            <img className="brand-name" src="/kapo-wordmark.png" alt="" width="111" height="32" />
+          </Link>
+          <SocialLinks />
+        </div>
         <nav aria-label="Shop links">
           <p>Shop</p>
           <Link href="/shop">All products</Link>
@@ -211,7 +214,6 @@ export function SiteFooter() {
           <p>Info</p>
           <Link href="/about">About</Link>
           <Link href="/faq">FAQ</Link>
-          <Link href="/contact">Contact</Link>
         </nav>
         <nav aria-label="Policy links">
           <p>Help</p>
@@ -224,6 +226,13 @@ export function SiteFooter() {
       <nav className="footer-characters" aria-label="Character pages">
         {characters.map((character) => <Link key={character.slug} href={`/characters/${character.slug}`}>{character.name}</Link>)}
       </nav>
+      <div className="newsletter-row">
+        <div>
+          <p>KAPO news</p>
+          <span>New characters, shop updates, and a weekly note. Orders and support chats are never added automatically.</span>
+        </div>
+        <NewsletterForm />
+      </div>
       <div className="footer-bottom global-footer-bottom">
         <span>© 2026 KAPO</span>
         <div>
@@ -232,5 +241,50 @@ export function SiteFooter() {
         <span>Keycaps with character.</span>
       </div>
     </footer>
+  );
+}
+
+function NewsletterForm() {
+  const [message, setMessage] = useState("");
+  const [pending, setPending] = useState(false);
+  return (
+    <form
+      className="newsletter-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        const form = event.currentTarget;
+        setPending(true);
+        setMessage("");
+        void fetch("/api/newsletter", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            email: String(data.get("email") ?? ""),
+            consent: data.get("consent") === "yes",
+            source: "footer",
+            company: String(data.get("company") ?? ""),
+          }),
+        }).then(async (response) => {
+          const payload = await response.json() as { message?: string };
+          setMessage(payload.message ?? "KAPO could not save that signup.");
+          setPending(false);
+          if (response.ok) form.reset();
+        }).catch(() => {
+          setMessage("KAPO could not save that signup.");
+          setPending(false);
+        });
+      }}
+    >
+      <label htmlFor="kapo-news-email">Email</label>
+      <input id="kapo-news-email" name="email" type="email" autoComplete="email" required />
+      <label className="newsletter-consent">
+        <input name="consent" type="checkbox" value="yes" required />
+        Email me KAPO news. I can unsubscribe at any time.
+      </label>
+      <input className="support-honeypot" tabIndex={-1} autoComplete="off" aria-hidden="true" name="company" defaultValue="" />
+      <button className="button button-dark" type="submit" disabled={pending}>{pending ? "Sending…" : "Sign up"}</button>
+      {message ? <p role="status">{message}</p> : null}
+    </form>
   );
 }

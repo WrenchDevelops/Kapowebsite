@@ -1,9 +1,11 @@
 import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
-
-export const dynamic = "force-dynamic";
-
+import { authenticateShopRequest, clerkBackend, requireSameOrigin } from "@/lib/auth/server";
 export async function POST(request: Request) {
-  (await cookies()).delete("kapo-account");
-  return NextResponse.redirect(new URL("/account", request.url), 303);
+  try { requireSameOrigin(request); } catch { return Response.json({ message: "Invalid request origin." }, { status: 403 }); }
+  const user = await authenticateShopRequest(request);
+  if (user) await clerkBackend().sessions.revokeSession(user.sessionId);
+  const jar = await cookies();
+  jar.delete("kapo-account");
+  jar.delete("__session");
+  return Response.json({ ok: true });
 }

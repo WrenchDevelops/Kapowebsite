@@ -6,7 +6,29 @@ export const ADMIN_PRODUCTION_STATUSES = ["awaiting_production", "printing", "qu
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 export type ProductionStatus = (typeof PRODUCTION_STATUSES)[number];
 export type ShippingStatus = (typeof SHIPPING_STATUSES)[number];
-export type EmailTemplate = "payment_confirmation" | "order_confirmation" | "production_started" | "order_ready_to_ship" | "shipment_confirmation" | "tracking_update" | "delivery_confirmation" | "refund_confirmation";
+export const EMAIL_TEMPLATES = [
+  "payment_confirmation",
+  "order_confirmation",
+  "production_started",
+  "order_ready_to_ship",
+  "shipment_confirmation",
+  "out_for_delivery",
+  "tracking_update",
+  "delivery_exception",
+  "returned_shipment",
+  "delivery_confirmation",
+  "refund_confirmation",
+  "payment_failed",
+  "order_canceled",
+] as const;
+
+export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number];
+
+const EMAIL_TEMPLATE_SET = new Set<string>(EMAIL_TEMPLATES);
+
+export function isEmailTemplate(value: string): value is EmailTemplate {
+  return EMAIL_TEMPLATE_SET.has(value);
+}
 
 export const PRODUCTION_LABELS: Record<ProductionStatus, string> = {
   pending_payment: "Awaiting payment",
@@ -35,34 +57,56 @@ export type TrackingUpdate = {
   emails: EmailTemplate[];
 };
 
-export function applyTrackingStatus(currentShipping: ShippingStatus, currentProduction: ProductionStatus, trackingStatus: string): TrackingUpdate {
+export function applyTrackingStatus(currentShipping: ShippingStatus, currentProduction: ProductionStatus, trackingStatus: string, substatus = ""): TrackingUpdate {
   const status = trackingStatus.toUpperCase();
+  const detail = substatus.toLowerCase().replace(/[\s-]+/g, "_");
   if (status === "DELIVERED") {
     return { shippingStatus: "delivered", productionStatus: "delivered", emails: ["delivery_confirmation"] };
+  }
+  if (currentShipping === "delivered" && (status === "TRANSIT" || detail === "out_for_delivery")) return { shippingStatus: "delivered", productionStatus: "delivered", emails: [] };
+  if (detail === "out_for_delivery") {
+    return {
+      shippingStatus: "in_transit",
+      productionStatus: currentProduction === "delivered" ? "delivered" : "shipped",
+      emails: ["out_for_delivery"],
+    };
   }
   if (status === "TRANSIT") {
     const alreadyMoving = currentShipping === "shipped" || currentShipping === "in_transit" || currentShipping === "delivered";
     return {
       shippingStatus: "in_transit",
       productionStatus: currentProduction === "delivered" ? "delivered" : "shipped",
-      emails: alreadyMoving ? ["tracking_update"] : ["shipment_confirmation", "tracking_update"],
+      emails: alreadyMoving ? ["tracking_update"] : ["shipment_confirmation"],
     };
   }
   if (status === "PRE_TRANSIT") {
-    return { shippingStatus: currentShipping === "not_purchased" ? "label_purchased" : currentShipping, productionStatus: null, emails: ["tracking_update"] };
+    return { shippingStatus: currentShipping === "not_purchased" ? "label_purchased" : currentShipping, productionStatus: null, emails: [] };
   }
-  if (status === "RETURNED" || status === "FAILURE") {
-    return { shippingStatus: "error", productionStatus: null, emails: ["tracking_update"] };
+  if (status === "RETURNED") {
+    return { shippingStatus: "error", productionStatus: null, emails: ["returned_shipment"] };
+  }
+  if (status === "FAILURE") {
+    return { shippingStatus: "error", productionStatus: null, emails: ["delivery_exception"] };
   }
   return { shippingStatus: currentShipping, productionStatus: null, emails: [] };
 }
 
 export type LabelAttempt = { status: string; createdAt: string };
 
+const OPEN_LABEL_RANK: Record<string, number> = { succeeded: 0, void_requested: 1, uncertain: 2, pending: 3 };
+
 export function planLabelPurchase(labels: LabelAttempt[], now: Date) {
-  const blocking = labels.find((label) => label.status === "pending" || label.status === "succeeded");
+  const blocking = labels
+    .filter((label) => OPEN_LABEL_RANK[label.status] !== undefined)
+    .sort((left, right) => OPEN_LABEL_RANK[left.status] - OPEN_LABEL_RANK[right.status])[0];
   if (!blocking) return { ok: true as const };
   if (blocking.status === "succeeded") return { ok: false as const, message: "This order already has a shipping label." };
+  if (blocking.status === "void_requested") {
+    return { ok: false as const, message: "A label refund is still pending. KAPO will not buy another label until Shippo finishes the void." };
+  }
+  if (blocking.status === "uncertain") {
+    return { ok: false as const, message: "A previous purchase did not return a definite result. Check Shippo before trying again. KAPO will not buy another label until you clear that attempt." };
+  }
   const ageMs = now.getTime() - Date.parse(blocking.createdAt);
   if (ageMs < 2 * 60 * 1000) return { ok: false as const, message: "A label purchase is already in progress." };
   return { ok: false as const, message: "A previous label attempt did not finish. Confirm in Shippo that no label was purchased, then clear the attempt." };
@@ -102,10 +146,28 @@ export type FinanceOrder = {
   shippingCents: number;
 };
 
+export function paymentSuccessEmails(): EmailTemplate[] {
+  return ["order_confirmation"];
+}
+
 export function refundPaymentStatus(totalCents: number, refundedCents: number, current: string) {
   if (refundedCents >= totalCents && totalCents > 0) return "refunded";
   if (refundedCents > 0) return "partially_refunded";
   return current;
+}
+
+export function applyRefundSnapshot(order: { paymentStatus: string; refundedCents: number; totalCents: number }, refundedCents: number) {
+  if (order.paymentStatus === "pending" || order.paymentStatus === "failed") {
+    return { action: "retry" as const };
+  }
+  if (!Number.isInteger(refundedCents) || refundedCents < order.refundedCents) {
+    return { action: "ignore" as const };
+  }
+  return {
+    action: "apply" as const,
+    refundedCents,
+    status: refundPaymentStatus(order.totalCents, refundedCents, order.paymentStatus),
+  };
 }
 
 export function summarizeFinance(orders: FinanceOrder[], labelCostCents: number) {

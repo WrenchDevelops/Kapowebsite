@@ -2,11 +2,18 @@ import type { Metadata, Viewport } from "next";
 import { CommerceProvider } from "@/components/CommerceProvider";
 import { RevealOnView } from "@/components/RevealOnView";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
+import { SupportChat } from "@/components/SupportChat";
+import { getShopUser } from "@/app/chatgpt-auth";
 import { getMacropadLaunch } from "@/lib/commerce/launch";
+import { widgetConfig } from "@/lib/support/config";
 import { siteJsonLd } from "@/lib/site-index";
 import { siteOrigin } from "@/lib/site-origin";
+import { ClubAuthProvider } from "@/components/ClubAuthProvider";
+import { authSettings } from "@/lib/auth/server";
+import "./club.css";
 import "./globals.css";
 import "./storefront.css";
+import "./admin/admin.css";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -75,18 +82,23 @@ export default async function RootLayout({
 }>) {
   const origin = await siteOrigin();
   const launch = await getMacropadLaunch();
+  const chat = widgetConfig();
+  const shopUser = await getShopUser();
   const jsonLd = JSON.stringify(siteJsonLd(origin, launch)).replace(/</g, "\\u003c");
   return (
     <html lang="en">
       <body>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
+        <ClubAuthProvider publishableKey={authSettings().publishableKey}>
         <CommerceProvider>
           <RevealOnView />
           <a className="skip-link" href="#main-content">Skip to content</a>
           <SiteHeader />
           {children}
           <SiteFooter />
+          {chat ? <SupportChat config={chat} accountEmail={shopUser?.email ?? null} /> : null}
         </CommerceProvider>
+        </ClubAuthProvider>
       </body>
     </html>
   );

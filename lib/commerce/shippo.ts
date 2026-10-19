@@ -82,7 +82,7 @@ export class ShippoClient {
     return shipment;
   }
 
-  async purchaseLabel(rateId: string, orderNumber: string) {
+  async purchaseLabel(rateId: string, orderNumber: string, idempotencyKey: string) {
     return this.request<ShippoTransaction>("/transactions", {
       method: "POST",
       body: JSON.stringify({
@@ -91,6 +91,7 @@ export class ShippoClient {
         label_file_type: "PDF_4x6",
         metadata: orderNumber,
       }),
+      idempotencyKey,
     });
   }
 
@@ -101,15 +102,17 @@ export class ShippoClient {
     });
   }
 
-  private async request<T>(path: string, init: RequestInit): Promise<T> {
+  private async request<T>(path: string, init: RequestInit & { idempotencyKey?: string }): Promise<T> {
+    const { idempotencyKey, ...requestInit } = init;
     let response: Response;
     try {
       response = await this.fetchImpl(`https://api.goshippo.com${path}`, {
-        ...init,
+        ...requestInit,
         headers: {
           Authorization: `ShippoToken ${this.token}`,
           "Content-Type": "application/json",
           "SHIPPO-API-VERSION": "2018-02-08",
+          ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
         },
         signal: AbortSignal.timeout(12_000),
       });

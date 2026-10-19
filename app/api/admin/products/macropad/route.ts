@@ -1,3 +1,4 @@
+import { requireSameOrigin } from "@/lib/auth/server";
 import { getAdminUser } from "@/app/admin-auth";
 import { saveMacropadLaunch } from "@/lib/commerce/launch";
 import { CommerceError } from "@/lib/commerce/errors";
@@ -7,6 +8,7 @@ import { moneyStringToCents } from "@/lib/commerce/money";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  try { requireSameOrigin(request); } catch { return Response.json({ message: "Invalid request origin." }, { status: 403 }); }
   const admin = await getAdminUser();
   if (!admin) return Response.json({ message: "Admin access is required." }, { status: 403 });
   try {

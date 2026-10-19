@@ -11,7 +11,12 @@ export default function FAQPage() {
   return (
     <main id="main-content" className="inner-page">
       <div className="faq-layout editorial-width">
-        <header><p className="eyebrow">FAQ</p><h1>Everything you need to know.</h1><p>Short answers about keycaps, the KAPO Pad, shipping, and small-batch production.</p></header>
+        <header>
+          <p className="eyebrow">FAQ</p>
+          <h1>Everything you need to know.</h1>
+          <p>Short answers about keycaps, the KAPO Pad, shipping, and small-batch production.</p>
+          <img className="faq-character" src="/products/spore-artisan.png" alt="" />
+        </header>
         <section className="faq-list">{faqItems.map(([question, answer], index) => <details key={question} open={index === 0}><summary>{question}<span>+</span></summary><p>{answer}</p></details>)}</section>
       </div>
     </main>

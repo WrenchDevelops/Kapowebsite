@@ -1,100 +1,65 @@
-# vinext-starter
+# KAPO storefront and KAPO Club
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+Next-compatible React storefront running on vinext/Cloudflare Workers with D1 and Drizzle. Clerk handles verified customer identity. Stripe, Shippo and Resend integrations remain subject to the launch acceptance gates.
 
-## Prerequisites
+## Local development
 
-- Node.js `>=22.13.0`
+Node 22.13+ is required for the application; the current database tests use the built-in `node:sqlite` API available in Node 22.13+.
 
-## Quick Start
-
-```bash
+```powershell
 npm install
 npm run dev
+npm test
+npm run test:club:http
 npm run build
+npx next typegen
+npx tsc --noEmit --incremental false
 ```
 
-This starter does not use `wrangler.jsonc`.
+HTTP security tests require the local server. `npm test` runs 33 commerce/email and 13 Club tests against isolated databases/provider doubles. The old starter loading-skeleton tests are not part of this suite.
 
-## Included Shape
+Copy the variable names in `.env.example` into ignored local environment files. The Worker preview reads `.dev.vars`; Clerk development credentials were also pulled into `.env.local`. Never commit actual secrets. Missing keys disable authentication instead of creating an insecure fallback.
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+## Customer identity
 
-## Workspace Auth Headers
+- Use the existing KAPO Keycaps Clerk application. Browser UI uses `@clerk/react`; server code uses `@clerk/backend` with explicit authorized origins, signature/expiry checks and authoritative active-session/verified-email checks.
+- Do not trust `oai-*`, `x-clerk-*`, body email/user ID, or the old `kapo-account` cookie as identity.
+- `/sign-in`, `/sign-up`, `/account` and `/account/orders/[orderNumber]` are the customer paths. Sign-in/account recovery use the provider's verified flow.
+- Admin requires the same verified identity and `KAPO_ADMIN_EMAILS`. No local admin bypass grants account access.
+- Verified users explicitly claim eligible guest orders. A matching email alone does not permit order reads or reassignment of another verified account's orders.
+- Membership does not opt a user into the newsletter.
 
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
+Development Clerk settings were checked and updated for email-code verification, optional signup phone/username, and a 30-day maximum session lifetime. Google is available in the development UI; real Google OAuth and production configuration require acceptance testing.
 
-The user ID is stable for the same user on the same Site and different across Sites. Email and name are intended for display or contact purposes.
+## Rewards and database
 
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
+Club data lives only in a real D1 binding. New schema is in `db/club-schema.ts`, with additive migrations `0005_exotic_true_believers.sql` and `0006_familiar_secret_warriors.sql`. Preserve the raw ledger triggers when authoring later migrations.
 
-Treat the full name as optional and fall back to email when it is absent:
+Migrations must be applied explicitly, not from production requests. The two Club migrations have been applied locally only. The earlier app partly bootstrapped old tables outside the standard migration tracker; identify and baseline the actual remote schema before applying migrations. Do not blindly rerun old ALTER statements or delete production data.
 
-```tsx
-import { headers } from "next/headers";
+For a local database already containing migrations 0000–0004, after building the Worker and verifying the target binding, the explicit one-time commands used were:
 
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
+```powershell
+npx wrangler d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0005_exotic_true_believers.sql
+npx wrangler d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0006_familiar_secret_warriors.sql
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+Do not repeat CREATE migrations on an already migrated database. No `--remote` migration or deployment is authorized by these examples.
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
+`KAPO_CLUB_ENABLED` and `KAPO_REWARDS_REDEMPTION_ENABLED` default off. Only local membership has been enabled for verification; redemption remains off. Default rules are 10 points/$1 eligible fulfilled merchandise, 100 points/$1 value, 300-point minimum, $10 merchandise minimum, 50 welcome and 100 first-order bonus. All rewards accounting and holds are server-owned and transactional. Birthday/review bonuses and cash conversion are absent.
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
+Per-order reward basis is frozen, event references are unique, the ledger is immutable, and refund adjustments are append-only. Bound reservations must be reconciled against actual provider sessions before release. Checkout and settlement/expiry share a database quote lease.
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
+## Production target and approval boundary
 
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
+The selected target retains Cloudflare Workers + the existing D1. `.openai/hosting.json`, `vite.config.ts`, `worker/index.ts` and the Sites build integration are preserved. The current standalone Vercel configuration still has an empty worker-environment adapter and cannot operate D1-backed commerce. It is not made production-ready by a successful Next build.
 
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
+Do not deploy, move DNS, change production identity settings, apply remote migrations/backfills, or enable live rewards/payment before the architecture/release plan is approved and the end-to-end provider journey passes.
 
-## Useful Commands
+Read:
 
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+- `KAPO_CLUB_ARCHITECTURE.md` — target, data ownership, reward policy, migration and rollback.
+- `KAPO_CLUB_PRODUCTION_READINESS.md` — implemented features, verification, known limits and production gates.
+- `KAPO_LAUNCH_AUDIT.md` — wider storefront/payment/fulfillment/email blockers; this is the historical pre-implementation audit.
 
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+A development-only `/account?preview=1` shows clearly labeled fictional design data. It never authenticates a visitor or mutates account records and is ignored in production.

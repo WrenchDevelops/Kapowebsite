@@ -3,10 +3,11 @@
 import { loadStripe } from "@stripe/stripe-js";
 import { CheckoutElementsProvider, PaymentElement, useCheckoutElements } from "@stripe/react-stripe-js/checkout";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { US_STATES } from "@/lib/commerce/address";
 import { formatCents } from "@/lib/commerce/money";
 import { useCommerce } from "./CommerceProvider";
+import { useSearchParams } from "next/navigation";
 
 type Rate = {
   id: string;
@@ -46,14 +47,16 @@ const appearance = {
     colorPrimary: "#101113",
     colorText: "#101113",
     colorDanger: "#8d2f2f",
-    fontFamily: "Inter, ui-sans-serif, sans-serif",
+    fontFamily: "Fredoka, ui-sans-serif, sans-serif",
     borderRadius: "2px",
   },
 };
 
 export function CheckoutExperience({ canceled }: { canceled: boolean }) {
+  const rewardId = useSearchParams().get("reward") ?? "";
   const { ready, items, clearCart } = useCommerce();
   const [quote, setQuote] = useState<Quote | null>(null);
+  const [quotedCart, setQuotedCart] = useState("");
   const [rateId, setRateId] = useState("");
   const [discountCode, setDiscountCode] = useState("");
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -64,6 +67,8 @@ export function CheckoutExperience({ canceled }: { canceled: boolean }) {
   const [textUpdates, setTextUpdates] = useState(false);
   const hasPendingPrice = items.some((item) => item.unitPrice === null);
   const stripePromise = useMemo(() => publishableKey ? loadStripe(publishableKey) : null, [publishableKey]);
+  const cartKey = items.map((item) => `${item.productId}:${item.quantity}`).join("|");
+  const activeQuote = quote && quotedCart === cartKey ? quote : null;
 
   if (!ready) return <div className="cart-layout editorial-width" aria-busy="true" />;
   if (!items.length) {
@@ -103,6 +108,7 @@ export function CheckoutExperience({ canceled }: { canceled: boolean }) {
         return;
       }
       setQuote(payload);
+      setQuotedCart(items.map((item) => `${item.productId}:${item.quantity}`).join("|"));
       setRateId(payload.defaultRateId ?? payload.rates[0]?.id ?? "");
     } catch {
       setMessage("Shipping rates could not be reached. Please try again.");
@@ -112,7 +118,7 @@ export function CheckoutExperience({ canceled }: { canceled: boolean }) {
   };
 
   const startPayment = async () => {
-    if (!quote || !rateId) return;
+    if (!activeQuote || !rateId) return;
     setBusy(true);
     setMessage("");
     try {
@@ -125,7 +131,7 @@ export function CheckoutExperience({ canceled }: { canceled: boolean }) {
       const response = await fetch("/api/checkout/session", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ quoteId: quote.quoteId, rateId, discountCode }),
+        body: JSON.stringify({ quoteId: activeQuote.quoteId, rateId, discountCode, redemptionId: rewardId || undefined }),
       });
       const payload = await response.json() as { clientSecret?: string; summary?: Summary; message?: string };
       if (!response.ok || !payload.clientSecret || !payload.summary) {
@@ -142,7 +148,8 @@ export function CheckoutExperience({ canceled }: { canceled: boolean }) {
     }
   };
 
-  const selected = quote?.rates.find((rate) => rate.id === rateId) ?? null;
+  const selected = activeQuote?.rates.find((rate) => rate.id === rateId) ?? null;
+  const visibleSummary = activeQuote && clientSecret ? summary : null;
 
   return (
     <div className="checkout-layout editorial-width">
@@ -189,30 +196,30 @@ export function CheckoutExperience({ canceled }: { canceled: boolean }) {
           <button className="button button-dark" type="submit" disabled={busy || hasPendingPrice}>{busy ? "Calculating shipping…" : "Calculate shipping"}</button>
         </form>
 
-        {quote && (
+        {activeQuote && (
           <fieldset className="rate-list">
             <legend>Shipping options</legend>
-            <p className="summary-note">Production: {quote.productionDaysMin}–{quote.productionDaysMax} business days. Carrier transit is listed separately and is not included in that production window. Quotes expire {new Date(quote.expiresAt).toLocaleTimeString()}.</p>
-            {quote.rates.map((rate) => (
+            <p className="summary-note">Production: {activeQuote.productionDaysMin}–{activeQuote.productionDaysMax} business days. Carrier transit is listed separately and is not included in that production window. Quotes expire {new Date(activeQuote.expiresAt).toLocaleTimeString()}.</p>
+            {activeQuote.rates.map((rate) => (
               <label className="rate-option" key={rate.id}>
                 <input type="radio" name="shipping-rate" value={rate.id} checked={rateId === rate.id} onChange={() => { setRateId(rate.id); setClientSecret(""); setSummary(null); }} />
                 <span><strong>{rate.tierLabel ?? `${rate.provider} ${rate.serviceName}`}</strong><small>{rate.detail ?? `${rate.provider} ${rate.serviceName}`}</small></span>
                 <b>{formatCents(rate.amountCents)}</b>
               </label>
             ))}
-            {quote.handlingFeeCents > 0 && <p className="summary-note">Each rate includes a {formatCents(quote.handlingFeeCents)} handling fee.</p>}
+            {activeQuote.handlingFeeCents > 0 && <p className="summary-note">Each rate includes a {formatCents(activeQuote.handlingFeeCents)} handling fee.</p>}
           </fieldset>
         )}
 
-        {quote && !clientSecret && (
+        {activeQuote && !clientSecret && (
           <div className="discount-row">
-            <label><span className="field-label">Discount code · optional</span><input value={discountCode} onChange={(event) => setDiscountCode(event.target.value)} autoComplete="off" /></label>
+            {rewardId ? <p className="summary-note">Your KAPO Club reward will be verified for this account and applied before payment. It cannot be combined with a promo code.</p> : <label><span className="field-label">Discount code · optional</span><input value={discountCode} onChange={(event) => setDiscountCode(event.target.value)} autoComplete="off" /></label>}
             <button className="button button-dark" type="button" onClick={() => void startPayment()} disabled={busy || !selected}>Continue to payment</button>
           </div>
         )}
 
-        {clientSecret && stripePromise && summary && (
-          <CheckoutElementsProvider stripe={stripePromise} options={{ clientSecret, elementsOptions: { appearance } }}>
+        {activeQuote && clientSecret && stripePromise && summary && (
+          <CheckoutElementsProvider stripe={stripePromise} options={{ clientSecret, elementsOptions: { appearance, fonts: [{ family: "Fredoka", src: `url(${window.location.origin}/fonts/Fredoka-Variable.ttf)`, weight: "400" }] } }}>
             <PaymentStep summary={summary} onPaid={clearCart} />
           </CheckoutElementsProvider>
         )}
@@ -227,11 +234,11 @@ export function CheckoutExperience({ canceled }: { canceled: boolean }) {
           ))}
         </ul>
         <dl>
-          <div><dt>Subtotal</dt><dd>{formatCents(summary?.merchandiseSubtotalCents ?? quote?.subtotalCents ?? items.reduce((total, item) => total + Math.round((item.unitPrice ?? 0) * 100) * item.quantity, 0), summary?.currency ?? "usd")}</dd></div>
-          <div><dt>Discount</dt><dd>{summary ? formatCents(summary.discountCents, summary.currency) : "Applied at payment"}</dd></div>
-          <div><dt>Shipping</dt><dd>{summary ? formatCents(summary.shippingCents, summary.currency) : selected ? formatCents(selected.amountCents) : "Calculated next"}</dd></div>
-          <div><dt>Tax</dt><dd>{summary ? formatCents(summary.taxCents, summary.currency) : "Calculated by Stripe"}</dd></div>
-          <div className="summary-total"><dt>Total</dt><dd>{summary ? formatCents(summary.totalCents, summary.currency) : "Confirm at payment"}</dd></div>
+          <div><dt>Subtotal</dt><dd>{formatCents(visibleSummary?.merchandiseSubtotalCents ?? activeQuote?.subtotalCents ?? items.reduce((total, item) => total + Math.round((item.unitPrice ?? 0) * 100) * item.quantity, 0), visibleSummary?.currency ?? "usd")}</dd></div>
+          <div><dt>Discount</dt><dd>{visibleSummary ? formatCents(visibleSummary.discountCents, visibleSummary.currency) : "Applied at payment"}</dd></div>
+          <div><dt>Shipping</dt><dd>{visibleSummary ? formatCents(visibleSummary.shippingCents, visibleSummary.currency) : selected ? formatCents(selected.amountCents) : "Calculated next"}</dd></div>
+          <div><dt>Tax</dt><dd>{visibleSummary ? formatCents(visibleSummary.taxCents, visibleSummary.currency) : "Calculated by Stripe"}</dd></div>
+          <div className="summary-total"><dt>Total</dt><dd>{visibleSummary ? formatCents(visibleSummary.totalCents, visibleSummary.currency) : "Confirm at payment"}</dd></div>
         </dl>
         <p className="stripe-note">Customers pay shipping. The label is bought later, when the order is packed.</p>
       </aside>
@@ -243,17 +250,21 @@ function PaymentStep({ summary, onPaid }: { summary: Summary; onPaid: () => void
   const checkout = useCheckoutElements();
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const submitting = useRef(false);
   if (checkout.type === "loading") return <p role="status">Loading secure payment…</p>;
   if (checkout.type === "error") return <p role="alert">{checkout.error.message}</p>;
 
   return (
     <form className="payment-step" onSubmit={async (event) => {
       event.preventDefault();
+      if (submitting.current) return;
+      submitting.current = true;
       setPending(true);
       setError("");
       const result = await checkout.checkout.confirm({ redirect: "if_required" });
       if (result.type === "error") {
         setError(result.error.message ?? "Payment did not go through.");
+        submitting.current = false;
         setPending(false);
         return;
       }

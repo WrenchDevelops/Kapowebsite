@@ -1,4 +1,4 @@
-import { PRODUCTION_DAYS_MAX, PRODUCTION_DAYS_MIN, RETURN_WINDOW_DAYS, SUPPORT_EMAIL } from "./store-facts";
+import { PRODUCTION_DAYS_MAX, PRODUCTION_DAYS_MIN, RETURN_WINDOW_DAYS, SUPPORT_EMAIL } from "./store-facts.ts";
 
 export type CharacterSlug =
   | "spore"
